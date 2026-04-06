@@ -267,7 +267,7 @@ El frontend debería iniciar en `http://localhost:5173`
 - El backend usa IDs tipo UUID (string) para mantener compatibilidad con el esquema original
 - Las transacciones automáticamente actualizan el balance de las tarjetas cuando son de tipo 'sale' o 'recharge'
 - Los items de transacciones se guardan como "snapshot" para mantener el historial
-- El frontend está configurado para usar MySQL por defecto, pero puedes volver a base44 comentando/descomentando código en `origen/API/base44Client.js`
+- El frontend está configurado para usar MySQL por defecto, pero puedes volver a base44 comentando/descomentando código en `origen/api/base44Client.js`
 
 ## 🆘 Soporte
 
