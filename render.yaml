@@ -1,5 +1,5 @@
-# Render Blueprint: API (Node) + sitio estático (Vite).
-# MySQL no está incluido: usa un proveedor MySQL externo (gratis o propio) y rellena DB_* al crear el stack.
+# Blueprint Render: API Node (backend/) + sitio estático Vite (dist/).
+# MySQL: define DB_* al crear el stack (base externa a Render).
 # https://render.com/docs/blueprint-spec
 services:
   - type: web
@@ -18,8 +18,6 @@ services:
         value: production
       - key: JWT_SECRET
         generateValue: true
-      # Orígenes permitidos (navegador). Tras el primer deploy, añade la URL del Static Site (https://....onrender.com).
-      # Puedes separar varios con coma, p. ej. producción y http://localhost:5173 para pruebas locales contra la API en la nube.
       - key: CORS_ORIGIN
         sync: false
       - key: DB_HOST
@@ -39,7 +37,7 @@ services:
     region: oregon
     rootDir: .
     buildCommand: npm install && npm run build
-    staticPublishPath: dist
+    staticPublishPath: ./dist
     routes:
       - type: rewrite
         source: /*
