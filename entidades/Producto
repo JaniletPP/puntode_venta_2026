@@ -1,0 +1,50 @@
+{
+  "name": "Product",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Nombre del producto"
+    },
+    "description": {
+      "type": "string",
+      "description": "Descripci\u00f3n del producto"
+    },
+    "price": {
+      "type": "number",
+      "description": "Precio del producto"
+    },
+    "stock": {
+      "type": "number",
+      "description": "Cantidad en inventario"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "bebidas",
+        "alimentos",
+        "servicios",
+        "accesorios",
+        "otros"
+      ],
+      "description": "Categor\u00eda del producto"
+    },
+    "barcode": {
+      "type": "string",
+      "description": "C\u00f3digo de barras"
+    },
+    "image_url": {
+      "type": "string",
+      "description": "URL de la imagen del producto"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Si el producto est\u00e1 activo"
+    }
+  },
+  "required": [
+    "name",
+    "price"
+  ]
+}

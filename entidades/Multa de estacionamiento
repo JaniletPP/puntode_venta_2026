@@ -1,0 +1,56 @@
+{
+  "name": "ParkingTicket",
+  "type": "object",
+  "properties": {
+    "ticket_number": {
+      "type": "string",
+      "description": "N\u00famero de ticket"
+    },
+    "plate_number": {
+      "type": "string",
+      "description": "N\u00famero de placa del veh\u00edculo"
+    },
+    "vehicle_type": {
+      "type": "string",
+      "enum": [
+        "car",
+        "motorcycle",
+        "truck"
+      ],
+      "default": "car",
+      "description": "Tipo de veh\u00edculo"
+    },
+    "entry_time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Hora de entrada"
+    },
+    "exit_time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Hora de salida"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "paid",
+        "cancelled"
+      ],
+      "default": "active"
+    },
+    "total_amount": {
+      "type": "number",
+      "description": "Monto total a pagar"
+    },
+    "card_id": {
+      "type": "string",
+      "description": "ID de tarjeta usada para pago"
+    }
+  },
+  "required": [
+    "ticket_number",
+    "plate_number",
+    "entry_time"
+  ]
+}

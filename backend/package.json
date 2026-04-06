@@ -1,0 +1,26 @@
+{
+  "name": "punto-venta-backend",
+  "version": "1.0.0",
+  "description": "Backend API para sistema de punto de venta con MySQL",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "seed:admin": "node scripts/seed_admin.mjs",
+    "migrate:001": "node migrations/run_001_add_product_area.mjs",
+    "migrate:004": "node migrations/run_004_multi_negocio.mjs"
+  },
+  "keywords": ["express", "mysql", "api", "punto-venta"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "mysql2": "^3.6.5",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "uuid": "^9.0.1"
+  }
+}

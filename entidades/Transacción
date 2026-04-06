@@ -1,0 +1,69 @@
+{
+  "name": "Transaction",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "enum": [
+        "sale",
+        "recharge",
+        "parking",
+        "refund"
+      ],
+      "description": "Tipo de transacci\u00f3n"
+    },
+    "amount": {
+      "type": "number",
+      "description": "Monto de la transacci\u00f3n"
+    },
+    "card_id": {
+      "type": "string",
+      "description": "ID de la tarjeta asociada"
+    },
+    "card_number": {
+      "type": "string",
+      "description": "N\u00famero de tarjeta"
+    },
+    "description": {
+      "type": "string",
+      "description": "Descripci\u00f3n de la transacci\u00f3n"
+    },
+    "items": {
+      "type": "array",
+      "description": "Productos vendidos",
+      "items": {
+        "type": "object",
+        "properties": {
+          "product_id": {
+            "type": "string"
+          },
+          "product_name": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number"
+          },
+          "unit_price": {
+            "type": "number"
+          },
+          "total": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "completed",
+        "pending",
+        "cancelled"
+      ],
+      "default": "completed"
+    }
+  },
+  "required": [
+    "type",
+    "amount"
+  ]
+}
