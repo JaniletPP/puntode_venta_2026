@@ -43,7 +43,8 @@ services:
     name: punto-venta-web
     runtime: static
     rootDir: .
-    buildCommand: npm install && npm run build
+    # Render suele fijar NODE_ENV=production; sin --include=dev no se instala Vite y el build falla.
+    buildCommand: npm install --include=dev && npm run build
     staticPublishPath: dist
     envVars:
       - key: NODE_VERSION
