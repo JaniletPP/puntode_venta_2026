@@ -19,11 +19,26 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+function corsAllowedOrigins() {
+    const raw = process.env.CORS_ORIGIN || 'http://localhost:5173';
+    return String(raw)
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean);
+}
+
 // Middleware
-app.use(cors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
-    credentials: true
-}));
+app.use(
+    cors({
+        origin(origin, callback) {
+            const allowed = corsAllowedOrigins();
+            if (!origin) return callback(null, true);
+            if (allowed.includes(origin)) return callback(null, true);
+            return callback(null, false);
+        },
+        credentials: true,
+    }),
+);
 
 // Webhook Mercado Pago: body crudo para verificación / parseo fiable (registrar ANTES de express.json)
 app.use(

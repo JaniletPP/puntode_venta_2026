@@ -8,6 +8,10 @@ export function getApiBaseUrl() {
     if (typeof v === 'string' && v.trim() !== '') {
         return v.replace(/\/$/, '');
     }
+    const origin = import.meta.env.VITE_API_ORIGIN;
+    if (typeof origin === 'string' && origin.trim() !== '') {
+        return `${origin.replace(/\/$/, '')}/api`;
+    }
     return 'http://localhost:3001/api';
 }
 

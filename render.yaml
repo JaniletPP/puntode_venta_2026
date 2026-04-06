@@ -1,0 +1,54 @@
+# Render Blueprint: API (Node) + sitio estático (Vite).
+# MySQL no está incluido: usa un proveedor MySQL externo (gratis o propio) y rellena DB_* al crear el stack.
+# https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: punto-venta-api
+    runtime: node
+    plan: free
+    region: oregon
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "20.18.0"
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      # Orígenes permitidos (navegador). Tras el primer deploy, añade la URL del Static Site (https://....onrender.com).
+      # Puedes separar varios con coma, p. ej. producción y http://localhost:5173 para pruebas locales contra la API en la nube.
+      - key: CORS_ORIGIN
+        sync: false
+      - key: DB_HOST
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_PORT
+        value: "3306"
+
+  - type: web
+    name: punto-venta-web
+    runtime: static
+    region: oregon
+    rootDir: .
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: NODE_VERSION
+        value: "20.18.0"
+      - key: VITE_API_ORIGIN
+        fromService:
+          name: punto-venta-api
+          type: web
+          envVarKey: RENDER_EXTERNAL_URL
