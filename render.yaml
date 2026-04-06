@@ -40,7 +40,6 @@ services:
   - type: web
     name: punto-venta-web
     runtime: static
-    region: oregon
     rootDir: .
     buildCommand: npm install && npm run build
     staticPublishPath: dist
