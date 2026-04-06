@@ -1,6 +1,12 @@
-# Blueprint Render: API Node (backend/) + sitio estático Vite (dist/).
-# MySQL: define DB_* al crear el stack (base externa a Render).
-# https://render.com/docs/blueprint-spec
+# Blueprint: API (backend/) + estático Vite (dist/).
+# Al crear el Blueprint, Render pedirá CORS_ORIGIN, VITE_API_ORIGIN y DB_*.
+# URLs típicas (ajusta si Render muestra otra en el panel):
+#   API:  https://punto-venta-api.onrender.com
+#   Web: https://punto-venta-web.onrender.com
+# CORS_ORIGIN debe incluir la URL del sitio estático, ej:
+#   https://punto-venta-web.onrender.com,http://localhost:5173
+# VITE_API_ORIGIN es solo el origen del API (sin /api), ej:
+#   https://punto-venta-api.onrender.com
 services:
   - type: web
     name: punto-venta-api
@@ -37,16 +43,13 @@ services:
     region: oregon
     rootDir: .
     buildCommand: npm install && npm run build
-    staticPublishPath: ./dist
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
+    staticPublishPath: dist
     envVars:
       - key: NODE_VERSION
         value: "20.18.0"
       - key: VITE_API_ORIGIN
-        fromService:
-          name: punto-venta-api
-          type: web
-          envVarKey: RENDER_EXTERNAL_URL
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
