@@ -11,7 +11,11 @@ function buildMysqlSsl() {
     if (typeof ca === 'string' && ca.trim() !== '') {
         return { ca: ca.trim(), rejectUnauthorized: true };
     }
-    return { rejectUnauthorized: true };
+    // Aiven (y otros) suelen requerir el PEM del CA en DB_SSL_CA; sin él Node rechaza la cadena ("self-signed certificate in certificate chain").
+    console.warn(
+        '[db] DB_SSL sin DB_SSL_CA: conexión TLS sin verificar cadena. Para producción pega el CA de Aiven en DB_SSL_CA.',
+    );
+    return { rejectUnauthorized: false };
 }
 
 const ssl = buildMysqlSsl();
