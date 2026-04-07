@@ -90,6 +90,17 @@ function normalizeBulkRow(row) {
     };
 }
 
+function isMissingAreaColumnError(err) {
+    const msg = String(err && err.message ? err.message : err);
+    const code = err && err.code;
+    const errno = err && err.errno;
+    return (
+        code === 'ER_BAD_FIELD_ERROR' ||
+        errno === 1054 ||
+        /Unknown column ['`]?area['`]?/i.test(msg)
+    );
+}
+
 // GET /api/products — listado o búsqueda por código de barras (?barcode=...)
 router.get('/', async (req, res) => {
     try {
@@ -199,23 +210,43 @@ router.post('/bulk', async (req, res) => {
         let inserted = 0;
         for (const row of toInsert) {
             const id = uuidv4();
-            await connection.execute(
-                `INSERT INTO productos (id, negocio_id, name, description, price, stock, category, barcode, image_url, active, area)
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [
-                    id,
-                    negocioId,
-                    row.name,
-                    row.description,
-                    row.price,
-                    row.stock,
-                    row.category,
-                    row.barcode,
-                    row.image_url,
-                    row.active,
-                    row.area ?? null,
-                ],
-            );
+            try {
+                await connection.execute(
+                    `INSERT INTO productos (id, negocio_id, name, description, price, stock, category, barcode, image_url, active, area)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                        id,
+                        negocioId,
+                        row.name,
+                        row.description,
+                        row.price,
+                        row.stock,
+                        row.category,
+                        row.barcode,
+                        row.image_url,
+                        row.active,
+                        row.area ?? null,
+                    ],
+                );
+            } catch (err) {
+                if (!isMissingAreaColumnError(err)) throw err;
+                await connection.execute(
+                    `INSERT INTO productos (id, negocio_id, name, description, price, stock, category, barcode, image_url, active)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                        id,
+                        negocioId,
+                        row.name,
+                        row.description,
+                        row.price,
+                        row.stock,
+                        row.category,
+                        row.barcode,
+                        row.image_url,
+                        row.active,
+                    ],
+                );
+            }
             inserted += 1;
         }
 
@@ -294,11 +325,20 @@ router.post('/', async (req, res) => {
                 : null;
 
         const id = uuidv4();
-        await pool.execute(
-            `INSERT INTO productos (id, negocio_id, name, description, price, stock, category, barcode, image_url, active, area)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [id, negocioId, name, description || null, price, stock, category, barcode || null, image_url || null, active, areaVal]
-        );
+        try {
+            await pool.execute(
+                `INSERT INTO productos (id, negocio_id, name, description, price, stock, category, barcode, image_url, active, area)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [id, negocioId, name, description || null, price, stock, category, barcode || null, image_url || null, active, areaVal]
+            );
+        } catch (err) {
+            if (!isMissingAreaColumnError(err)) throw err;
+            await pool.execute(
+                `INSERT INTO productos (id, negocio_id, name, description, price, stock, category, barcode, image_url, active)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [id, negocioId, name, description || null, price, stock, category, barcode || null, image_url || null, active]
+            );
+        }
 
         const [newProduct] = await pool.execute(
             'SELECT *, created_at as created_date FROM productos WHERE id = ? AND negocio_id = ?',
