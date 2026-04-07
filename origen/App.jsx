@@ -17,6 +17,7 @@ import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Login from './pages/Login';
 import ConsultaSaldoCliente from './pages/ConsultaSaldoCliente';
 import PrivateRoute from '@/lib/PrivateRoute';
+import ErrorBoundary from '@/lib/ErrorBoundary';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -79,11 +80,13 @@ const AuthenticatedApp = () => {
       <Route path="/Login" element={<Login />} />
       <Route path="/" element={
         <PrivateRoute>
-          <LayoutWrapper currentPageName={mainPageKey}>
-            <LocalHomeRedirect>
-              <MainPage />
-            </LocalHomeRedirect>
-          </LayoutWrapper>
+          <ErrorBoundary label={`route:/ (page:${mainPageKey})`}>
+            <LayoutWrapper currentPageName={mainPageKey}>
+              <LocalHomeRedirect>
+                <MainPage />
+              </LocalHomeRedirect>
+            </LayoutWrapper>
+          </ErrorBoundary>
         </PrivateRoute>
       } />
       {Object.entries(Pages).map(([path, Page]) => (
@@ -92,9 +95,11 @@ const AuthenticatedApp = () => {
           path={`/${path}`}
           element={
             <PrivateRoute>
-              <LayoutWrapper currentPageName={path}>
-                <Page />
-              </LayoutWrapper>
+              <ErrorBoundary label={`route:/${path}`}>
+                <LayoutWrapper currentPageName={path}>
+                  <Page />
+                </LayoutWrapper>
+              </ErrorBoundary>
             </PrivateRoute>
           }
         />

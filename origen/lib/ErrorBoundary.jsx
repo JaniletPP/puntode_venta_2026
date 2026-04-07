@@ -3,7 +3,7 @@ import React from 'react';
 export default class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { hasError: false, message: '' };
+    this.state = { hasError: false, message: '', stack: '', componentStack: '' };
   }
 
   static getDerivedStateFromError(error) {
@@ -12,6 +12,10 @@ export default class ErrorBoundary extends React.Component {
 
   componentDidCatch(error, errorInfo) {
     console.error('ErrorBoundary:', error, errorInfo);
+    this.setState({
+      stack: String(error?.stack || ''),
+      componentStack: String(errorInfo?.componentStack || ''),
+    });
   }
 
   handleReload = () => {
@@ -20,6 +24,13 @@ export default class ErrorBoundary extends React.Component {
 
   render() {
     if (!this.state.hasError) return this.props.children;
+
+    const label = this.props.label ? String(this.props.label) : '';
+    const details = [
+      label ? `label: ${label}` : null,
+      this.state.componentStack ? `componentStack:\n${this.state.componentStack}` : null,
+      this.state.stack ? `stack:\n${this.state.stack}` : null,
+    ].filter(Boolean).join('\n\n');
 
     return (
       <div className="min-h-screen bg-slate-100 flex items-center justify-center p-6">
@@ -32,6 +43,11 @@ export default class ErrorBoundary extends React.Component {
             <p className="mt-3 rounded-md bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
               {this.state.message}
             </p>
+          ) : null}
+          {details ? (
+            <pre className="mt-3 max-h-56 overflow-auto rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-snug text-slate-700 whitespace-pre-wrap">
+              {details}
+            </pre>
           ) : null}
           <button
             type="button"
