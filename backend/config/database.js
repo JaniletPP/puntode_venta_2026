@@ -32,6 +32,11 @@ const dbConfig = {
     ...(ssl ? { ssl } : {}),
 };
 
+const pwdSet = Boolean(dbConfig.password);
+console.log(
+    `[db] MySQL → ${dbConfig.host}:${dbConfig.port} db="${dbConfig.database}" user="${dbConfig.user}" passwordSet=${pwdSet}`,
+);
+
 // Crear pool de conexiones
 const pool = mysql.createPool(dbConfig);
 
@@ -44,6 +49,9 @@ export async function testConnection() {
         return true;
     } catch (error) {
         console.error('❌ Error al conectar con MySQL:', error.message);
+        if (error.code) console.error('   code:', error.code);
+        if (error.errno) console.error('   errno:', error.errno);
+        if (error.sqlState) console.error('   sqlState:', error.sqlState);
         return false;
     }
 }
