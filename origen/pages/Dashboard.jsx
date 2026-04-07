@@ -13,11 +13,22 @@ import {
     Loader2
 } from "lucide-react";
 import { motion } from "framer-motion";
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
+import { format as formatDate } from 'date-fns';
+import { es } from 'date-fns/locale/es';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6'];
+
+/** Evita RangeError de date-fns y colisiones de nombre `format` con dependencias minificadas. */
+function safeFormatDateFns(dateInput, pattern) {
+    const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
+    if (Number.isNaN(d.getTime())) return '—';
+    return formatDate(d, pattern, { locale: es });
+}
+
+function txCreatedAt(t) {
+    return t.created_date ?? t.created_at;
+}
 
 export default function Dashboard() {
     const [transactions, setTransactions] = useState([]);
@@ -93,7 +104,7 @@ export default function Dashboard() {
     todayStart.setHours(0, 0, 0, 0);
     
     const todayTransactions = transactions.filter(t => 
-        new Date(t.created_date) >= todayStart
+        new Date(txCreatedAt(t)) >= todayStart
     );
     
     const todaySales = todayTransactions
@@ -117,12 +128,12 @@ export default function Dashboard() {
         nextDay.setDate(nextDay.getDate() + 1);
         
         const dayTransactions = transactions.filter(t => {
-            const txDate = new Date(t.created_date);
+            const txDate = new Date(txCreatedAt(t));
             return txDate >= date && txDate < nextDay;
         });
         
         return {
-            name: format(date, 'EEE', { locale: es }),
+            name: safeFormatDateFns(date, 'EEE'),
             ventas: dayTransactions.filter(t => t.type === 'sale').reduce((s, t) => s + Number(t.amount || 0), 0),
             recargas: dayTransactions.filter(t => t.type === 'recharge').reduce((s, t) => s + Number(t.amount || 0), 0),
         };
@@ -303,6 +314,11 @@ export default function Dashboard() {
                         </CardHeader>
                         <CardContent>
                             <div className="h-64">
+                                {pieData.length === 0 ? (
+                                    <div className="h-full flex items-center justify-center text-slate-500 text-sm">
+                                        Sin datos para mostrar
+                                    </div>
+                                ) : (
                                 <ResponsiveContainer width="100%" height="100%">
                                     <PieChart>
                                         <Pie
@@ -318,8 +334,8 @@ export default function Dashboard() {
                                                 <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                                             ))}
                                         </Pie>
-                                        <Tooltip 
-                                            formatter={(value) => `$${Number(value || 0).toFixed(2)}`}
+                                        <Tooltip
+                                            formatter={(value, name) => [`$${Number(value ?? 0).toFixed(2)}`, name]}
                                             contentStyle={{ 
                                                 backgroundColor: 'white', 
                                                 border: 'none', 
@@ -329,6 +345,7 @@ export default function Dashboard() {
                                         />
                                     </PieChart>
                                 </ResponsiveContainer>
+                                )}
                             </div>
                             <div className="flex flex-wrap justify-center gap-4 mt-4">
                                 {pieData.map((entry, index) => (
@@ -364,14 +381,14 @@ export default function Dashboard() {
                                         className="flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors"
                                     >
                                         <div className="flex items-center gap-4">
-                                            <div className={`p-2 rounded-lg ${typeColors[tx.type]}`}>
+                                            <div className={`p-2 rounded-lg ${typeColors[tx.type] || 'text-slate-600 bg-slate-100'}`}>
                                                 {tx.type === 'sale' && <ShoppingBag className="w-5 h-5" />}
                                                 {tx.type === 'recharge' && <CreditCard className="w-5 h-5" />}
                                                 {tx.type === 'parking' && <Package className="w-5 h-5" />}
                                                 {tx.type === 'refund' && <TrendingUp className="w-5 h-5" />}
                                             </div>
                                             <div>
-                                                <p className="font-medium text-slate-800">{typeLabels[tx.type]}</p>
+                                                <p className="font-medium text-slate-800">{typeLabels[tx.type] ?? tx.type ?? '—'}</p>
                                                 <p className="text-sm text-slate-500">
                                                     {tx.card_number ? `Tarjeta: ${tx.card_number}` : tx.description}
                                                 </p>
@@ -382,7 +399,7 @@ export default function Dashboard() {
                                                 {tx.type === 'refund' ? '-' : '+'}${Number(tx.amount || 0).toFixed(2)}
                                             </p>
                                             <p className="text-xs text-slate-400">
-                                                {format(new Date(tx.created_date), 'dd/MM HH:mm', { locale: es })}
+                                                {safeFormatDateFns(tx.created_date ?? tx.created_at, 'dd/MM HH:mm')}
                                             </p>
                                         </div>
                                     </motion.div>
