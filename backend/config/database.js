@@ -21,10 +21,10 @@ function buildMysqlSsl() {
 const ssl = buildMysqlSsl();
 
 const dbConfig = {
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || 'punto_venta',
+    host: String(process.env.DB_HOST || 'localhost').trim(),
+    user: String(process.env.DB_USER || 'root').trim(),
+    password: String(process.env.DB_PASSWORD || '').trim(),
+    database: String(process.env.DB_NAME || 'punto_venta').trim(),
     port: Number(process.env.DB_PORT || 3306),
     waitForConnections: true,
     connectionLimit: 10,
