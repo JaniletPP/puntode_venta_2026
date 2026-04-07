@@ -34,6 +34,7 @@ export default function POS() {
     const [paymentModalKey, setPaymentModalKey] = useState(0);
     const [selectedCard, setSelectedCard] = useState(null);
     const [autoChargeOnOpen, setAutoChargeOnOpen] = useState(false);
+    const [scannedExternalPayment, setScannedExternalPayment] = useState(null);
     const [products, setProducts] = useState([]);
     const [loadingProducts, setLoadingProducts] = useState(true);
 
@@ -179,6 +180,7 @@ export default function POS() {
     const handleCardFound = (card, options = {}) => {
         setSelectedCard(card);
         setAutoChargeOnOpen(Boolean(options?.autoCharge));
+        setScannedExternalPayment(options?.externalPayment || null);
         setPaymentModalKey((k) => k + 1);
         setShowPayment(true);
     };
@@ -378,10 +380,12 @@ export default function POS() {
                     setShowPayment(false);
                     setSelectedCard(null);
                     setAutoChargeOnOpen(false);
+                    setScannedExternalPayment(null);
                 }}
                 onSuccess={finalizeSuccessfulPayment}
                 preselectedInternalCard={selectedCard}
                 autoChargeOnOpen={autoChargeOnOpen}
+                scannedExternalPayment={scannedExternalPayment}
                 total={total}
                 cartItems={cart}
                 canCharge={canCharge}

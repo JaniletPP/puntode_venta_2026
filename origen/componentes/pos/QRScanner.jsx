@@ -31,7 +31,7 @@ export default function QRScanner({ open, onClose, onCardFound }) {
 
     function parseScannedPayload(rawValue) {
         const raw = String(rawValue || '').trim();
-        if (!raw) return { cardNumber: '', methodHint: '' };
+        if (!raw) return { cardNumber: '', methodHint: '', externalPayment: null };
 
         // 1) JSON payload: {"card_number":"123","method":"bbva"}
         if ((raw.startsWith('{') && raw.endsWith('}')) || (raw.startsWith('%7B') && raw.endsWith('%7D'))) {
@@ -40,7 +40,7 @@ export default function QRScanner({ open, onClose, onCardFound }) {
                 const obj = JSON.parse(decoded);
                 const card = String(obj.card_number || obj.numero || obj.card || '').trim();
                 const method = String(obj.method || obj.metodo || obj.bank || '').trim();
-                return { cardNumber: card, methodHint: method };
+                return { cardNumber: card, methodHint: method, externalPayment: null };
             } catch {
                 // continue
             }
@@ -49,7 +49,7 @@ export default function QRScanner({ open, onClose, onCardFound }) {
         // 2) Prefixed payload: MP:12345678 | BBVA|12345678
         const pref = raw.match(/^([a-zA-Z_]+)\s*[:|]\s*([a-zA-Z0-9\-_.]+)$/);
         if (pref) {
-            return { cardNumber: String(pref[2] || '').trim(), methodHint: String(pref[1] || '').trim() };
+            return { cardNumber: String(pref[2] || '').trim(), methodHint: String(pref[1] || '').trim(), externalPayment: null };
         }
 
         // 3) Query-like payload: card=12345678&method=bbva
@@ -58,28 +58,46 @@ export default function QRScanner({ open, onClose, onCardFound }) {
                 const url = new URL(raw.includes('://') ? raw : `https://local.scan/?${raw}`);
                 const card = String(url.searchParams.get('card') || url.searchParams.get('numero') || '').trim();
                 const method = String(url.searchParams.get('method') || url.searchParams.get('metodo') || '').trim();
-                if (card) return { cardNumber: card, methodHint: method };
+                if (card) return { cardNumber: card, methodHint: method, externalPayment: null };
             } catch {
                 // continue
             }
         }
 
-        // 4) URL en path (/card/123 o /tarjeta/123)
-        if (/^https?:\/\//i.test(raw)) {
+        // 4) URL (con o sin esquema) en path (/card/123 o /tarjeta/123)
+        const looksLikeDomainUrl =
+            /^https?:\/\//i.test(raw) ||
+            /^[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(?:\/|$)/.test(raw);
+        if (looksLikeDomainUrl) {
             try {
-                const url = new URL(raw);
+                const normalized = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+                const url = new URL(normalized);
                 const m = String(url.pathname || '').match(/(?:card|tarjeta|numero|n)\/([a-zA-Z0-9\-_.]+)/i);
                 if (m?.[1]) {
-                    return { cardNumber: String(m[1]).trim(), methodHint: url.hostname };
+                    return { cardNumber: String(m[1]).trim(), methodHint: url.hostname, externalPayment: null };
                 }
-                return { cardNumber: '', methodHint: url.hostname };
+                // URL de proveedor externo: usar como referencia de pago terminal
+                const host = String(url.hostname || '').toLowerCase();
+                let metodo = 'Terminal';
+                if (host.includes('mpago') || host.includes('mercadopago')) metodo = 'Mercado Pago';
+                else if (host.includes('bbva')) metodo = 'BBVA';
+                else if (host) metodo = host;
+                return {
+                    cardNumber: '',
+                    methodHint: url.hostname,
+                    externalPayment: {
+                        tipo: 'tarjeta_externa',
+                        metodo,
+                        referencia: raw.slice(0, 180),
+                    },
+                };
             } catch {
                 // continue
             }
         }
 
         // 5) Raw card number
-        return { cardNumber: raw, methodHint: '' };
+        return { cardNumber: raw, methodHint: '', externalPayment: null };
     }
 
     const searchByCardNumber = async (value, methodHint = '') => {
@@ -104,7 +122,7 @@ export default function QRScanner({ open, onClose, onCardFound }) {
             if (methodHint) {
                 setScanHint(`Método detectado: ${methodHint}`);
             }
-            onCardFound(data, { autoCharge: autoChargeOnScan, methodHint });
+            onCardFound(data, { autoCharge: autoChargeOnScan, methodHint, externalPayment: null });
             setCardNumber('');
             setError('');
             onClose();
@@ -159,6 +177,15 @@ export default function QRScanner({ open, onClose, onCardFound }) {
                                     setCardNumber(parsed.cardNumber);
                                     setScanHint(parsed.methodHint ? `Método detectado: ${parsed.methodHint}` : 'Tarjeta detectada');
                                     await searchByCardNumber(parsed.cardNumber, parsed.methodHint);
+                                } else if (parsed.externalPayment) {
+                                    setScanHint(`QR detectado: ${parsed.methodHint || parsed.externalPayment.metodo}`);
+                                    setError('');
+                                    onCardFound(null, {
+                                        autoCharge: autoChargeOnScan,
+                                        methodHint: parsed.methodHint || '',
+                                        externalPayment: parsed.externalPayment,
+                                    });
+                                    onClose();
                                 } else if (parsed.methodHint) {
                                     setScanHint(`QR detectado: ${parsed.methodHint}`);
                                     setError('Ese QR no es de tarjeta interna del sistema. Escanea el QR/código de la tarjeta del punto de venta.');

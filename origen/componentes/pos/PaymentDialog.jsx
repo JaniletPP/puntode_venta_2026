@@ -50,6 +50,7 @@ export default function PaymentDialog({
     onSuccess,
     preselectedInternalCard,
     autoChargeOnOpen = false,
+    scannedExternalPayment = null,
     total, 
     cartItems = [],
     canCharge = true,
@@ -106,6 +107,35 @@ export default function PaymentDialog({
             autoFinalizeRef.current = false;
         }
     }, [open]);
+
+    useEffect(() => {
+        if (!open || !scannedExternalPayment) return;
+        if (autoAppliedRef.current) return;
+        if (status === 'success') return;
+        if (pagosTemp.length > 0) return;
+        const restante = roundMoney(restanteSrv);
+        if (!(restante > 0)) return;
+        autoAppliedRef.current = true;
+        const metodo = String(scannedExternalPayment.metodo || 'Terminal').trim();
+        const referencia = String(scannedExternalPayment.referencia || '').trim().slice(0, 180);
+        setDraftTipo('tarjeta_externa');
+        setDraftMetodoPreset('Otro');
+        setDraftMetodoOtro(metodo);
+        setDraftReferencia(referencia);
+        setPagosTemp([{
+            id: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
+            tipo: 'tarjeta_externa',
+            monto: restante,
+            referencia,
+            metodo,
+            numero_tarjeta: '',
+        }]);
+        if (autoChargeOnOpen) {
+            autoFinalizeRef.current = true;
+        } else {
+            setResultMessage(`QR externo detectado (${metodo}). Pago terminal preparado por ${restante.toFixed(2)}.`);
+        }
+    }, [open, scannedExternalPayment, status, pagosTemp.length, restanteSrv, autoChargeOnOpen]);
 
     useEffect(() => {
         if (draftTipo !== 'tarjeta_externa') setRegistroManualExterno(false);
