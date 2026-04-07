@@ -23,9 +23,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './origen'),
-      // Workaround: the installed framer-motion package is missing some ESM (.mjs) files under dist/es.
-      // Using the CJS build avoids those missing imports so the dev server can start.
-      'framer-motion': path.resolve(__dirname, 'node_modules/framer-motion/dist/cjs/index.js'),
     }
   },
   plugins: [
