@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2, CreditCard, LogIn } from 'lucide-react';
-import { format } from 'date-fns';
+import { format as formatDate } from 'date-fns';
 import { es } from 'date-fns/locale/es';
 
 /**
@@ -18,6 +18,16 @@ export default function ConsultaSaldoCliente() {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [data, setData] = useState(null);
+
+    function safeFormatDateFns(dateInput, pattern) {
+        try {
+            const d = dateInput instanceof Date ? dateInput : new Date(dateInput);
+            if (Number.isNaN(d.getTime())) return '—';
+            return formatDate(d, pattern, { locale: es });
+        } catch {
+            return '—';
+        }
+    }
 
     const consultar = async (e) => {
         e?.preventDefault?.();
@@ -167,11 +177,7 @@ export default function ConsultaSaldoCliente() {
                                                         <p className="truncate text-xs text-slate-500">{m.detalle}</p>
                                                     ) : null}
                                                     <p className="mt-1 text-xs text-slate-400">
-                                                        {m.fecha
-                                                            ? format(new Date(m.fecha), "d MMM yyyy, HH:mm", {
-                                                                  locale: es,
-                                                              })
-                                                            : '—'}
+                                                        {safeFormatDateFns(m.fecha, 'd MMM yyyy, HH:mm')}
                                                     </p>
                                                 </div>
                                                 <span className="shrink-0 font-semibold tabular-nums text-slate-900">
