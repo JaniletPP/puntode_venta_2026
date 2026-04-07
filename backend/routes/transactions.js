@@ -87,6 +87,7 @@ export async function handleCorteCaja(req, res) {
 
         const sqlConArea = `
             SELECT t.id, t.amount, t.type, t.card_id,
+                   ti.product_id, ti.product_name,
                    ti.total AS line_total, ti.quantity,
                    COALESCE(NULLIF(TRIM(p.area), ''), 'sin área') AS area
             FROM transacciones t
@@ -97,6 +98,7 @@ export async function handleCorteCaja(req, res) {
               AND t.created_at >= ? AND t.created_at <= ?`;
         const sqlSinColumnaArea = `
             SELECT t.id, t.amount, t.type, t.card_id,
+                   ti.product_id, ti.product_name,
                    ti.total AS line_total, ti.quantity,
                    'sin área' AS area
             FROM transacciones t
@@ -129,6 +131,7 @@ export async function handleCorteCaja(req, res) {
 
         const byTx = new Map();
         const qtyByArea = new Map();
+        const productAgg = new Map(); // key: product_id|name -> { product_id, name, cantidad, total }
 
         for (const row of rows) {
             const id = row.id;
@@ -142,8 +145,29 @@ export async function handleCorteCaja(req, res) {
             const lineTotal = Number(row.line_total) || 0;
             const qty = Number(row.quantity) || 0;
             const area = row.area || 'sin área';
-            byTx.get(id).items.push({ line_total: lineTotal, quantity: qty, area });
+            const productId = row.product_id ?? null;
+            const productName = String(row.product_name || 'Producto').trim() || 'Producto';
+            byTx.get(id).items.push({
+                line_total: lineTotal,
+                quantity: qty,
+                area,
+                product_id: productId,
+                product_name: productName,
+            });
             qtyByArea.set(area, (qtyByArea.get(area) || 0) + qty);
+
+            const key = `${productId ?? ''}__${productName}`;
+            if (!productAgg.has(key)) {
+                productAgg.set(key, {
+                    product_id: productId,
+                    nombre: productName,
+                    cantidad: 0,
+                    total: 0,
+                });
+            }
+            const p = productAgg.get(key);
+            p.cantidad += qty;
+            p.total = roundMoney(p.total + lineTotal);
         }
 
         const txIds = [...byTx.keys()];
@@ -232,11 +256,33 @@ export async function handleCorteCaja(req, res) {
             .sort((a, b) => String(a.area).localeCompare(String(b.area), 'es'));
 
         const total_general = roundMoney(areas.reduce((s, a) => s + a.total, 0));
+        const total_productos = [...productAgg.values()].reduce((s, p) => s + Number(p.cantidad || 0), 0);
+        const productos = [...productAgg.values()]
+            .map((p) => ({
+                product_id: p.product_id,
+                nombre: p.nombre,
+                cantidad: Number(p.cantidad || 0),
+                total: roundMoney(p.total),
+            }))
+            .sort((a, b) => Number(b.total || 0) - Number(a.total || 0));
+
+        const metodos_generales = areas.reduce(
+            (acc, a) => {
+                acc.efectivo = roundMoney(acc.efectivo + Number(a?.metodos?.efectivo || 0));
+                acc.terminal = roundMoney(acc.terminal + Number(a?.metodos?.terminal || 0));
+                acc.tarjeta = roundMoney(acc.tarjeta + Number(a?.metodos?.tarjeta || 0));
+                return acc;
+            },
+            { efectivo: 0, terminal: 0, tarjeta: 0 },
+        );
         const numero_ventas = txIds.length;
 
         res.json({
+            productos,
             areas,
             total_general,
+            total_productos,
+            metodos_generales,
             numero_ventas,
             periodo: { inicio: s, fin: e },
         });

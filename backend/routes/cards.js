@@ -21,6 +21,40 @@ const resolveScopeNegocioId = (req) => {
     return req.user?.negocio_id || 'negocio_default';
 };
 
+function isMissingNegocioIdColumnError(err) {
+    const msg = String(err && err.message ? err.message : err);
+    const code = err && err.code;
+    const errno = err && err.errno;
+    return (
+        code === 'ER_BAD_FIELD_ERROR' ||
+        errno === 1054 ||
+        /Unknown column ['`]?negocio_id['`]?/i.test(msg)
+    );
+}
+
+/**
+ * Tarjetas deben ser visibles para todos los roles permitidos dentro del sistema.
+ * Para no “desaparecer” tarjetas legacy, incluimos negocio_id IS NULL cuando hay scope,
+ * y si la columna negocio_id no existe, hacemos fallback sin filtro.
+ */
+async function selectTarjetasScoped(scopeNegocioId, sqlBase, params = []) {
+    if (!scopeNegocioId) {
+        const [rows] = await pool.execute(sqlBase, params);
+        return rows;
+    }
+    try {
+        const [rows] = await pool.execute(
+            sqlBase.replace('/*SCOPE_WHERE*/', 'WHERE (negocio_id = ? OR negocio_id IS NULL)'),
+            [scopeNegocioId, ...params],
+        );
+        return rows;
+    } catch (e) {
+        if (!isMissingNegocioIdColumnError(e)) throw e;
+        const [rows] = await pool.execute(sqlBase.replace('/*SCOPE_WHERE*/', ''), params);
+        return rows;
+    }
+}
+
 /** INSERT pagos compatible con esquemas con/sin columnas extra (misma idea que payments.js). */
 async function insertPagoRow(connection, row) {
     const {
@@ -100,12 +134,10 @@ async function insertPagoRecarga(connection, {
 router.get('/', async (req, res) => {
     try {
         const scopeNegocioId = resolveScopeNegocioId(req);
-        const [rows] = !scopeNegocioId
-            ? await pool.execute('SELECT *, created_at as created_date FROM tarjetas ORDER BY created_at DESC')
-            : await pool.execute(
-                'SELECT *, created_at as created_date FROM tarjetas WHERE negocio_id = ? ORDER BY created_at DESC',
-                [scopeNegocioId],
-            );
+        const rows = await selectTarjetasScoped(
+            scopeNegocioId,
+            'SELECT *, created_at as created_date FROM tarjetas /*SCOPE_WHERE*/ ORDER BY created_at DESC',
+        );
         res.json(rows);
     } catch (error) {
         console.error('Error al obtener tarjetas:', error);
@@ -123,24 +155,18 @@ router.get('/search', async (req, res) => {
         const scopeNegocioId = resolveScopeNegocioId(req);
         const like = `%${q}%`;
         const limit = 20;
-        const [rows] = !scopeNegocioId
-            ? await pool.execute(
-                `SELECT id, card_number, holder_name, balance, status
-                 FROM tarjetas
-                 WHERE card_number LIKE ? OR holder_name LIKE ?
-                 ORDER BY holder_name ASC, card_number ASC
-                 LIMIT ${limit}`,
-                [like, like],
-            )
-            : await pool.execute(
-                `SELECT id, card_number, holder_name, balance, status
-                 FROM tarjetas
-                 WHERE negocio_id = ? AND (card_number LIKE ? OR holder_name LIKE ?)
-                 ORDER BY holder_name ASC, card_number ASC
-                 LIMIT ${limit}`,
-                [scopeNegocioId, like, like],
-            );
-        res.json(rows);
+        const rows = await selectTarjetasScoped(
+            scopeNegocioId,
+            `SELECT id, card_number, holder_name, balance, status
+             FROM tarjetas
+             /*SCOPE_WHERE*/
+             WHERE (card_number LIKE ? OR holder_name LIKE ?)
+             ORDER BY holder_name ASC, card_number ASC
+             LIMIT ${limit}`,
+            // params for LIKE filters are appended after scope param (if any)
+            [like, like],
+        );
+        res.json(Array.isArray(rows) ? rows : []);
     } catch (error) {
         console.error('Error en /cards/search:', error);
         res.status(500).json({ error: 'Error al buscar tarjetas' });
