@@ -1,7 +1,15 @@
 /**
- * Crea usuario admin inicial (ejecutar una vez).
- * Uso: node scripts/seed_admin.mjs
- * Variables opcionales: ADMIN_EMAIL, ADMIN_PASSWORD
+ * Crea/actualiza un usuario inicial (admin o superadmin).
+ *
+ * Uso:
+ * - node scripts/seed_admin.mjs
+ *
+ * Variables:
+ * - ADMIN_EMAIL (default: admin@local.test)
+ * - ADMIN_PASSWORD (default: admin123)
+ * - ADMIN_ROLE (default: admin)  -> valores: admin | superadmin
+ *
+ * Nota: no elimina otros usuarios; solo upsert por email.
  */
 import bcrypt from 'bcryptjs';
 import dotenv from 'dotenv';
@@ -18,6 +26,8 @@ function cleanPassword(v) {
 
 const email = (process.env.ADMIN_EMAIL || 'admin@local.test').toLowerCase().trim();
 const plain = process.env.ADMIN_PASSWORD || 'admin123';
+const roleRaw = String(process.env.ADMIN_ROLE || 'admin').trim().toLowerCase();
+const role = roleRaw === 'superadmin' ? 'superadmin' : 'admin';
 
 const hash = await bcrypt.hash(plain, 10);
 
@@ -65,15 +75,15 @@ const [existing] = await conn.execute('SELECT id FROM usuarios WHERE email = ? L
 if (existing.length) {
     await conn.execute(
         'UPDATE usuarios SET password_hash = ?, rol = ?, nombre = ?, negocio_id = ? WHERE email = ?',
-        [hash, 'admin', 'Administrador', 'negocio_default', email],
+        [hash, role, role === 'superadmin' ? 'Superadmin' : 'Administrador', 'negocio_default', email],
     );
 } else {
     const id = uuidv4();
     await conn.execute(
         'INSERT INTO usuarios (id, email, password_hash, nombre, rol, negocio_id) VALUES (?, ?, ?, ?, ?, ?)',
-        [id, email, hash, 'Administrador', 'admin', 'negocio_default'],
+        [id, email, hash, role === 'superadmin' ? 'Superadmin' : 'Administrador', role, 'negocio_default'],
     );
 }
 
 await conn.end();
-console.log(`Usuario admin listo: ${email} (ADMIN_PASSWORD o admin123 por defecto)`);
+console.log(`Usuario listo: ${email} (rol: ${role})`);
