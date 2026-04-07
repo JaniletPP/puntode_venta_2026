@@ -203,20 +203,25 @@ export default function QRScanner({ open, onClose, onCardFound }) {
 
                 <div className="space-y-6 py-4">
                     <div className="aspect-square max-w-[240px] mx-auto rounded-2xl border border-slate-200 bg-slate-100 relative overflow-hidden">
-                        {cameraReady ? (
-                            <>
-                                <video ref={videoRef} className="h-full w-full object-cover" playsInline muted />
-                                <motion.div
-                                    className="absolute left-2 right-2 h-1 bg-indigo-500/60"
-                                    animate={{ top: ['10%', '90%', '10%'] }}
-                                    transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
-                                />
-                            </>
-                        ) : (
-                            <div className="h-full w-full flex items-center justify-center">
+                        <video
+                            ref={videoRef}
+                            className={`h-full w-full object-cover ${cameraReady ? 'opacity-100' : 'opacity-0'}`}
+                            playsInline
+                            muted
+                            autoPlay
+                        />
+                        {!cameraReady ? (
+                            <div className="absolute inset-0 flex items-center justify-center">
                                 <QrCode className="w-16 h-16 text-slate-400" />
                             </div>
-                        )}
+                        ) : null}
+                        {cameraReady ? (
+                            <motion.div
+                                className="absolute left-2 right-2 h-1 bg-indigo-500/60"
+                                animate={{ top: ['10%', '90%', '10%'] }}
+                                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                            />
+                        ) : null}
                     </div>
 
                     <div className="text-center text-sm text-slate-500">
