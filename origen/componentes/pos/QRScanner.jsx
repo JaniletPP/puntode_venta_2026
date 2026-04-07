@@ -64,7 +64,21 @@ export default function QRScanner({ open, onClose, onCardFound }) {
             }
         }
 
-        // 4) Raw card number
+        // 4) URL en path (/card/123 o /tarjeta/123)
+        if (/^https?:\/\//i.test(raw)) {
+            try {
+                const url = new URL(raw);
+                const m = String(url.pathname || '').match(/(?:card|tarjeta|numero|n)\/([a-zA-Z0-9\-_.]+)/i);
+                if (m?.[1]) {
+                    return { cardNumber: String(m[1]).trim(), methodHint: url.hostname };
+                }
+                return { cardNumber: '', methodHint: url.hostname };
+            } catch {
+                // continue
+            }
+        }
+
+        // 5) Raw card number
         return { cardNumber: raw, methodHint: '' };
     }
 
@@ -145,6 +159,9 @@ export default function QRScanner({ open, onClose, onCardFound }) {
                                     setCardNumber(parsed.cardNumber);
                                     setScanHint(parsed.methodHint ? `Método detectado: ${parsed.methodHint}` : 'Tarjeta detectada');
                                     await searchByCardNumber(parsed.cardNumber, parsed.methodHint);
+                                } else if (parsed.methodHint) {
+                                    setScanHint(`QR detectado: ${parsed.methodHint}`);
+                                    setError('Ese QR no es de tarjeta interna del sistema. Escanea el QR/código de la tarjeta del punto de venta.');
                                 }
                                 setTimeout(() => { scanLockRef.current = false; }, 1200);
                             }
