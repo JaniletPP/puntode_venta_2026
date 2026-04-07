@@ -12,7 +12,11 @@ const isGlobalAdmin = (req) => {
 
 const resolveScopeNegocioId = (req) => {
     const role = String(req.user?.rol || '').toLowerCase();
-    if (role === 'cajero' || role === 'mesero') return req.user?.negocio_id || 'negocio_default';
+    // Tarjetas globales del sistema: no filtrar por negocio para roles operativos.
+    if (role === 'superadmin' || role === 'admin' || role === 'supervisor' || role === 'cajero') {
+        return null;
+    }
+    if (role === 'mesero') return req.user?.negocio_id || 'negocio_default';
     if (isGlobalAdmin(req)) {
         const fromHeader = String(req.headers['x-negocio-id'] || '').trim();
         if (!fromHeader || fromHeader.toLowerCase() === 'all') return null;
@@ -384,6 +388,10 @@ router.get('/:id', async (req, res) => {
 router.post('/', async (req, res) => {
     try {
         const role = String(req.user?.rol || '').toLowerCase();
+        const allowed = ['superadmin', 'admin', 'supervisor', 'cajero'];
+        if (!allowed.includes(role)) {
+            return res.status(403).json({ error: 'No tienes permisos para crear tarjetas' });
+        }
         const negocioId = role === 'cajero' || role === 'mesero'
             ? String(req.user?.negocio_id || '').trim()
             : String(req.body?.negocio_id || req.headers['x-negocio-id'] || req.user?.negocio_id || '').trim();
