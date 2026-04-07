@@ -21,12 +21,25 @@ const plain = process.env.ADMIN_PASSWORD || 'admin123';
 
 const hash = await bcrypt.hash(plain, 10);
 
+function buildSsl() {
+    const v = String(process.env.DB_SSL || '').trim().toLowerCase();
+    if (v !== 'true' && v !== '1') return undefined;
+    const ca = process.env.DB_SSL_CA;
+    if (typeof ca === 'string' && ca.trim() !== '') {
+        return { ca: ca.trim(), rejectUnauthorized: true };
+    }
+    return { rejectUnauthorized: false };
+}
+
+const ssl = buildSsl();
+
 const conn = await mysql.createConnection({
-    host: process.env.DB_HOST || 'localhost',
-    user: process.env.DB_USER || 'root',
+    host: String(process.env.DB_HOST || 'localhost').trim(),
+    user: String(process.env.DB_USER || 'root').trim(),
     password: cleanPassword(process.env.DB_PASSWORD),
-    database: process.env.DB_NAME || 'punto_venta',
+    database: String(process.env.DB_NAME || 'punto_venta').trim(),
     port: Number(process.env.DB_PORT || 3306),
+    ...(ssl ? { ssl } : {}),
 });
 
 const [existing] = await conn.execute('SELECT id FROM usuarios WHERE email = ? LIMIT 1', [email]);
