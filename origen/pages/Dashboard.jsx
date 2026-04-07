@@ -12,7 +12,6 @@ import {
     ArrowDownRight,
     Loader2
 } from "lucide-react";
-import { motion } from "framer-motion";
 import { format as formatDate } from 'date-fns';
 import { es } from 'date-fns/locale/es';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
@@ -180,7 +179,7 @@ export default function Dashboard() {
 
                 {/* Stats Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }}>
+                    <div>
                         <Card className="border-0 shadow-sm bg-gradient-to-br from-green-500 to-green-600 text-white overflow-hidden">
                             <CardContent className="p-6 relative">
                                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
@@ -199,9 +198,9 @@ export default function Dashboard() {
                                 </div>
                             </CardContent>
                         </Card>
-                    </motion.div>
+                    </div>
 
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+                    <div>
                         <Card className="border-0 shadow-sm bg-gradient-to-br from-blue-500 to-blue-600 text-white overflow-hidden">
                             <CardContent className="p-6 relative">
                                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
@@ -220,9 +219,9 @@ export default function Dashboard() {
                                 </div>
                             </CardContent>
                         </Card>
-                    </motion.div>
+                    </div>
 
-                    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+                    <div>
                         <Card className="border-0 shadow-sm bg-gradient-to-br from-indigo-500 to-indigo-600 text-white overflow-hidden">
                             <CardContent className="p-6 relative">
                                 <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2" />
@@ -250,7 +249,7 @@ export default function Dashboard() {
                                 </div>
                             </CardContent>
                         </Card>
-                    </motion.div>
+                    </div>
                 </div>
 
                 {/* Charts */}
@@ -373,11 +372,8 @@ export default function Dashboard() {
                                 <p className="text-center text-slate-500 py-8">No hay transacciones recientes</p>
                             ) : (
                                 recentTransactions.map((tx, index) => (
-                                    <motion.div
+                                    <div
                                         key={tx.id}
-                                        initial={{ opacity: 0, x: -20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        transition={{ delay: index * 0.05 }}
                                         className="flex items-center justify-between p-4 bg-slate-50 rounded-xl hover:bg-slate-100 transition-colors"
                                     >
                                         <div className="flex items-center gap-4">
@@ -402,7 +398,7 @@ export default function Dashboard() {
                                                 {safeFormatDateFns(tx.created_date ?? tx.created_at, 'dd/MM HH:mm')}
                                             </p>
                                         </div>
-                                    </motion.div>
+                                    </div>
                                 ))
                             )}
                         </div>
