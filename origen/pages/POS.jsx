@@ -182,14 +182,21 @@ export default function POS() {
     };
 
     const finalizeSuccessfulPayment = async () => {
-        await fetchProducts();
-        await fetchCards();
-        clearCart();
-        setSelectedCard(null);
+        try {
+            await fetchProducts();
+        } catch (e) {
+            console.warn('POS: no se pudo refrescar productos tras cobro', e);
+        } finally {
+            // Importante: limpiar aunque el refetch falle.
+            clearCart();
+            setSelectedCard(null);
+            setShowPayment(false);
+        }
     };
 
     const finalizeRecharge = async () => {
-        await fetchCards();
+        // No hay lista de tarjetas en POS; el modal maneja su propio estado.
+        setShowRecharge(false);
     };
 
     return (

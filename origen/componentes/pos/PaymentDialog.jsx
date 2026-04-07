@@ -795,6 +795,32 @@ ${pagosBlock}
                                                     value={draftMonto}
                                                     onChange={(e) => setDraftMonto(e.target.value)}
                                                 />
+                                                <div className="mt-2 flex flex-wrap gap-2">
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-8 px-3 text-xs"
+                                                        onClick={() => setDraftMonto(String(restanteSrv.toFixed(2)))}
+                                                    >
+                                                        Pagar restante
+                                                    </Button>
+                                                    {draftTipo === 'tarjeta_interna' && selectedInternalCard ? (
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="h-8 px-3 text-xs"
+                                                            onClick={() => {
+                                                                const bal = roundMoney(Number(selectedInternalCard.balance || 0));
+                                                                const use = roundMoney(Math.min(restanteSrv, bal));
+                                                                setDraftMonto(use > 0 ? String(use.toFixed(2)) : '');
+                                                            }}
+                                                        >
+                                                            Usar saldo disponible
+                                                        </Button>
+                                                    ) : null}
+                                                </div>
                                             </div>
                                             <Button
                                                 type="button"
