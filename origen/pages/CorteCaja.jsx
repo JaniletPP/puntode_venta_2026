@@ -70,10 +70,13 @@ export default function CorteCaja() {
     const [error, setError] = useState(null);
     const [data, setData] = useState(null);
     const areas = Array.isArray(data?.areas) ? data.areas : [];
+    const productos = Array.isArray(data?.productos) ? data.productos : [];
     const totalEfectivo = areas.reduce((s, a) => s + Number(a?.metodos?.efectivo || 0), 0);
     const totalTerminal = areas.reduce((s, a) => s + Number(a?.metodos?.terminal || 0), 0);
     const totalTarjeta = areas.reduce((s, a) => s + Number(a?.metodos?.tarjeta || 0), 0);
     const totalGeneral = Number(data?.total_general || 0);
+    const totalProductos = Number(data?.total_productos || 0);
+    const metodosGenerales = data?.metodos_generales || { efectivo: totalEfectivo, terminal: totalTerminal, tarjeta: totalTarjeta };
     const numeroVentas = Number(data?.numero_ventas || 0);
     const chartData = areas.map((a) => ({
         area: String(a?.area || 'sin área').toUpperCase(),
@@ -125,7 +128,7 @@ export default function CorteCaja() {
                 pdf.setTextColor(255, 255, 255);
                 pdf.setFont('helvetica', 'bold');
                 pdf.setFontSize(16);
-                pdf.text('CORTE DE CAJA POR AREA', margin + 6, 19);
+                pdf.text('CORTE DE CAJA', margin + 6, 19);
                 pdf.setFont('helvetica', 'normal');
                 pdf.setFontSize(10);
                 pdf.text(`Periodo: ${inicio || '-'} a ${fin || '-'}`, margin + 6, 27);
@@ -158,10 +161,13 @@ export default function CorteCaja() {
                 pdf.text(value, x + 3, yy + 10.5);
             };
             drawKPI(margin, y, 'Total general', formatMoney(totalGeneral));
-            drawKPI(margin + kpiW + 6, y, 'Numero de ventas', String(numeroVentas));
+            drawKPI(margin + kpiW + 6, y, 'Número de ventas', String(numeroVentas));
             y += 18;
-            drawKPI(margin, y, 'Total efectivo', formatMoney(totalEfectivo));
-            drawKPI(margin + kpiW + 6, y, 'Total terminal + tarjeta', formatMoney(totalTerminal + totalTarjeta));
+            drawKPI(margin, y, 'Total productos vendidos', String(totalProductos));
+            drawKPI(margin + kpiW + 6, y, 'Total efectivo', formatMoney(metodosGenerales.efectivo));
+            y += 18;
+            drawKPI(margin, y, 'Total terminal', formatMoney(metodosGenerales.terminal));
+            drawKPI(margin + kpiW + 6, y, 'Total tarjeta', formatMoney(metodosGenerales.tarjeta));
             y += 20;
 
             // Tabla
@@ -229,6 +235,60 @@ export default function CorteCaja() {
                     x += cols[idx].w;
                 });
                 y += rowH;
+            }
+
+            // Productos vendidos (top 30)
+            if (Array.isArray(data.productos) && data.productos.length) {
+                y += 10;
+                ensurePageSpace(18);
+                pdf.setFont('helvetica', 'bold');
+                pdf.setFontSize(12);
+                pdf.text('PRODUCTOS VENDIDOS (TOP 30)', margin, y);
+                y += 6;
+
+                const pCols = [
+                    { label: 'Producto', w: 110 },
+                    { label: 'Cant.', w: 20 },
+                    { label: 'Total', w: 40 },
+                ];
+                const headerH2 = 8;
+                const rowH2 = 7.2;
+                const drawPHeader = () => {
+                    pdf.setFillColor(15, 23, 42);
+                    pdf.rect(margin, y, contentW, headerH2, 'F');
+                    pdf.setTextColor(255, 255, 255);
+                    pdf.setFont('helvetica', 'bold');
+                    pdf.setFontSize(9);
+                    let x = margin + 2;
+                    pCols.forEach((c) => { pdf.text(c.label, x, y + 5.3); x += c.w; });
+                    y += headerH2;
+                    pdf.setTextColor(35, 35, 35);
+                };
+                drawPHeader();
+                const top = data.productos.slice(0, 30);
+                for (let i = 0; i < top.length; i += 1) {
+                    ensurePageSpace(rowH2 + 2);
+                    if (y + rowH2 > pageH - margin) {
+                        pdf.addPage();
+                        drawHeader();
+                        y = 40;
+                        drawPHeader();
+                    }
+                    const p = top[i];
+                    if (i % 2 === 0) {
+                        pdf.setFillColor(248, 250, 252);
+                        pdf.rect(margin, y, contentW, rowH2, 'F');
+                    }
+                    pdf.setDrawColor(226, 232, 240);
+                    pdf.rect(margin, y, contentW, rowH2, 'S');
+                    pdf.setFont('helvetica', 'normal');
+                    pdf.setFontSize(8.5);
+                    const name = String(p?.nombre || 'Producto').slice(0, 44);
+                    pdf.text(name, margin + 2, y + 5.1);
+                    pdf.text(String(p?.cantidad ?? 0), margin + 2 + pCols[0].w + pCols[1].w - 3, y + 5.1, { align: 'right' });
+                    pdf.text(formatMoney(p?.total), margin + 2 + pCols[0].w + pCols[1].w + pCols[2].w - 3, y + 5.1, { align: 'right' });
+                    y += rowH2;
+                }
             }
             pdf.save('corte_caja.pdf');
         } catch (err) {
@@ -421,17 +481,21 @@ export default function CorteCaja() {
                                             <p className="text-sm text-blue-700">Total general</p>
                                             <p className="text-2xl font-bold text-blue-900">{formatMoney(totalGeneral)}</p>
                                         </div>
+                                    <div className="rounded-xl bg-slate-50 border border-slate-200 p-4 shadow-sm">
+                                        <p className="text-sm text-slate-600">Productos vendidos</p>
+                                        <p className="text-2xl font-bold text-slate-900">{String(totalProductos)}</p>
+                                    </div>
                                         <div className="rounded-xl bg-green-50 border border-green-100 p-4 shadow-sm">
                                             <p className="text-sm text-green-700">Total efectivo</p>
-                                            <p className="text-2xl font-bold text-green-900">{formatMoney(totalEfectivo)}</p>
+                                        <p className="text-2xl font-bold text-green-900">{formatMoney(metodosGenerales.efectivo)}</p>
                                         </div>
                                         <div className="rounded-xl bg-violet-50 border border-violet-100 p-4 shadow-sm">
                                             <p className="text-sm text-violet-700">Total terminal</p>
-                                            <p className="text-2xl font-bold text-violet-900">{formatMoney(totalTerminal)}</p>
+                                        <p className="text-2xl font-bold text-violet-900">{formatMoney(metodosGenerales.terminal)}</p>
                                         </div>
                                         <div className="rounded-xl bg-orange-50 border border-orange-100 p-4 shadow-sm">
                                             <p className="text-sm text-orange-700">Total tarjeta</p>
-                                            <p className="text-2xl font-bold text-orange-900">{formatMoney(totalTarjeta)}</p>
+                                        <p className="text-2xl font-bold text-orange-900">{formatMoney(metodosGenerales.tarjeta)}</p>
                                         </div>
                                         <div className="rounded-xl bg-white border border-slate-200 p-4 shadow-sm">
                                             <p className="text-sm text-slate-500">Número de ventas</p>
@@ -508,6 +572,40 @@ export default function CorteCaja() {
                                         Selecciona fechas y consulta para ver el corte
                                     </div>
                                 )
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    <Card className="border-0 shadow-md">
+                        <CardHeader>
+                            <CardTitle className="text-lg">Productos vendidos</CardTitle>
+                            <p className="text-sm text-slate-500">
+                                Nombre, cantidad y total generado por producto.
+                            </p>
+                        </CardHeader>
+                        <CardContent>
+                            {productos.length > 0 ? (
+                                <div className="overflow-hidden rounded-xl border border-slate-200">
+                                    <div className="grid grid-cols-12 bg-slate-900 text-white text-sm font-semibold px-4 py-3">
+                                        <div className="col-span-7">Producto</div>
+                                        <div className="col-span-2 text-right">Cantidad</div>
+                                        <div className="col-span-3 text-right">Total</div>
+                                    </div>
+                                    {productos.map((p, idx) => (
+                                        <div
+                                            key={`${p.product_id || p.nombre}-${idx}`}
+                                            className={`grid grid-cols-12 px-4 py-3 text-sm border-t border-slate-100 ${
+                                                idx % 2 === 0 ? 'bg-white' : 'bg-slate-50'
+                                            }`}
+                                        >
+                                            <div className="col-span-7 font-medium text-slate-800">{p.nombre}</div>
+                                            <div className="col-span-2 text-right text-slate-700">{String(p.cantidad ?? 0)}</div>
+                                            <div className="col-span-3 text-right font-semibold text-slate-900">{formatMoney(p.total)}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <p className="text-sm text-slate-500">No hay productos vendidos en este periodo.</p>
                             )}
                         </CardContent>
                     </Card>
