@@ -40,8 +40,9 @@ function iconEstado(estado) {
 }
 
 /**
- * Cobro incremental: inicia transacción pending, POST /payments/create por cada línea,
- * tarjeta externa → Point (pendiente hasta webhook). Cierra con cancel si no se completó.
+ * Split payments (pago combinado):
+ * - En frontend se acumulan pagos temporales (no se manda nada al backend por pago individual).
+ * - Cuando el restante llega a 0, se finaliza enviando todos los pagos en 1 request a /payments/process.
  */
 export default function PaymentDialog({ 
     open, 
@@ -52,9 +53,6 @@ export default function PaymentDialog({
     cartItems = [],
     canCharge = true,
 }) {
-    const [transactionId, setTransactionId] = useState(null);
-    const [summary, setSummary] = useState(null);
-    const [startError, setStartError] = useState('');
     const [processing, setProcessing] = useState(false);
     const [status, setStatus] = useState(null);
     const [resultMessage, setResultMessage] = useState('');
@@ -62,7 +60,6 @@ export default function PaymentDialog({
 
     const closingRef = useRef(false);
     const successHandledRef = useRef(false);
-    const saleCompletedRef = useRef(false);
     const cartRef = useRef(cartItems);
     const totalRef = useRef(total);
     cartRef.current = cartItems;
@@ -77,6 +74,9 @@ export default function PaymentDialog({
     /** Sin Point: el cobro se marca aprobado con folio (requiere referencia). */
     const [registroManualExterno, setRegistroManualExterno] = useState(false);
 
+    /** Pagos temporales (split payments) */
+    const [pagosTemp, setPagosTemp] = useState([]);
+
     /** Tarjeta interna: búsqueda bajo demanda (no lista completa). */
     const [internalSearchQuery, setInternalSearchQuery] = useState('');
     const [internalSearchResults, setInternalSearchResults] = useState([]);
@@ -90,44 +90,15 @@ export default function PaymentDialog({
     const [rechargeError, setRechargeError] = useState('');
     const internalSearchWrapRef = useRef(null);
 
-    const saleTotal = roundMoney(summary?.amount ?? total);
-    const restanteSrv = roundMoney(summary?.restante ?? saleTotal);
-    const totalAprobado = roundMoney(summary?.total_aprobado ?? 0);
-    const totalPendiente = roundMoney(summary?.total_pendiente ?? 0);
-
-    const applySummary = useCallback((data, idOverride) => {
-        const id = idOverride || data?.transaction_id;
-        setSummary(data);
-        if (String(data.status || '').toLowerCase() === 'completed') {
-            saleCompletedRef.current = true;
-            setStatus('success');
-            setResultData({
-                transaction_id: id,
-                total: data.amount,
-                pagos: (data.pagos || []).map((p) => ({
-                    metodo_pago: p.tipo,
-                    monto: p.monto,
-                    referencia: p.referencia || p.referencia_externa,
-                })),
-            });
-            setResultMessage('Pago completado');
-        }
-    }, []);
-
-    const refreshSummary = useCallback(async (txId) => {
-        const id = txId || transactionId;
-        if (!id) return;
-        const res = await fetchApi(`/payments/transaction/${id}/summary`);
-        if (!res.ok) return;
-        const data = await res.json();
-        applySummary(data, id);
-    }, [transactionId, applySummary]);
+    const saleTotal = roundMoney(totalRef.current);
+    const totalPagado = roundMoney(pagosTemp.reduce((s, p) => s + Number(p.monto || 0), 0));
+    const restanteSrv = roundMoney(saleTotal - totalPagado);
+    const canFinalize = restanteSrv <= EPS && pagosTemp.length > 0;
 
     useEffect(() => {
         if (open) {
             closingRef.current = false;
             successHandledRef.current = false;
-            saleCompletedRef.current = false;
         }
     }, [open]);
 
@@ -138,10 +109,7 @@ export default function PaymentDialog({
     useEffect(() => {
         if (!open) return;
         let cancelled = false;
-        setTransactionId(null);
-        setSummary(null);
-        setStartError('');
-                setStatus(null);
+        setStatus(null);
         setResultData(null);
         setResultMessage('');
         setDraftError('');
@@ -158,58 +126,10 @@ export default function PaymentDialog({
         setRechargeOpen(false);
         setRechargeMonto('');
         setRechargeError('');
+        setPagosTemp([]);
 
-        const snap = cartRef.current || [];
-        const itemsPayload = snap.map((item) => ({
-            product_id: item.id,
-            product_name: item.name,
-            quantity: Number(item.quantity || 0),
-            unit_price: Number(item.price || 0),
-            total: Number(item.price || 0) * Number(item.quantity || 0),
-        }));
-        const totalVenta = snap.reduce(
-            (s, item) => s + Number(item.price || 0) * Number(item.quantity || 0),
-            0,
-        );
-
-        (async () => {
-            try {
-                const res = await fetchApi('/payments/transaction/start', {
-                    method: 'POST',
-                    body: {
-                        total: roundMoney(totalVenta),
-                        description: `Venta POS - ${itemsPayload.length} productos`,
-                        items: itemsPayload,
-                    },
-                });
-                const data = await res.json().catch(() => ({}));
-                if (cancelled) return;
-                if (!res.ok) {
-                    throw new Error(data.error || 'No se pudo iniciar la venta');
-                }
-                const tid = data.transaction_id;
-                setTransactionId(tid);
-                const resSum = await fetchApi(`/payments/transaction/${tid}/summary`);
-                if (cancelled) return;
-                if (resSum.ok) {
-                    const sumData = await resSum.json();
-                    applySummary(sumData, tid);
-                }
-            } catch (e) {
-                console.error(e);
-                if (!cancelled) setStartError(e.message || 'Error al iniciar cobro');
-            }
-        })();
         return () => { cancelled = true; };
-    }, [open, preselectedInternalCard?.id, applySummary]);
-
-    useEffect(() => {
-        if (!open || !transactionId || status === 'success') return;
-        const t = setInterval(() => {
-            refreshSummary(transactionId);
-            }, 2000);
-        return () => clearInterval(t);
-    }, [open, transactionId, status, refreshSummary]);
+    }, [open, preselectedInternalCard?.id]);
 
     useEffect(() => {
         if (!open || !preselectedInternalCard?.id) return;
@@ -279,16 +199,6 @@ export default function PaymentDialog({
         return () => document.removeEventListener('mousedown', onDown);
     }, [open]);
 
-    const cancelRemoteTransaction = useCallback(async () => {
-        const tid = transactionId;
-        if (!tid || saleCompletedRef.current) return;
-        try {
-            await fetchApi(`/payments/transaction/${tid}/cancel`, { method: 'POST' });
-        } catch (e) {
-            console.warn('Cancel venta pendiente:', e);
-        }
-    }, [transactionId]);
-
     const payMontoPreview = roundMoney(draftMonto);
     const cardBalPreview = roundMoney(selectedInternalCard?.balance ?? 0);
     const insufficientInternal =
@@ -338,10 +248,6 @@ export default function PaymentDialog({
             setDraftError('Tu rol no puede cobrar.');
             return;
         }
-        if (!transactionId) {
-            setDraftError('Espera a que se inicie la venta…');
-            return;
-        }
         setDraftError('');
         const monto = roundMoney(draftMonto);
         if (!monto || monto <= 0) {
@@ -353,9 +259,13 @@ export default function PaymentDialog({
             return;
         }
 
-        let body = {
-            transaction_id: transactionId,
+        const next = {
+            id: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
+            tipo: draftTipo,
             monto,
+            referencia: draftReferencia.trim() || '',
+            metodo: '',
+            numero_tarjeta: '',
         };
 
         if (draftTipo === 'tarjeta_interna') {
@@ -372,47 +282,88 @@ export default function PaymentDialog({
                 setDraftError('Saldo insuficiente. Recarga saldo antes de cobrar.');
                 return;
             }
-            body.metodo = 'tarjeta_interna';
-            body.card_id = selectedInternalCard.id;
-            body.numero_tarjeta = selectedInternalCard.card_number;
+            next.tipo = 'tarjeta_interna';
+            next.numero_tarjeta = String(selectedInternalCard.card_number || '').trim();
         } else if (draftTipo === 'tarjeta_externa') {
-            body.metodo = 'tarjeta_externa';
             let detalle;
             if (draftMetodoPreset === 'Otro') {
                 detalle = draftMetodoOtro.trim() || 'Terminal';
             } else {
                 detalle = draftMetodoPreset;
             }
-            body.metodo_detalle = detalle;
+            next.tipo = 'tarjeta_externa';
+            next.metodo = detalle;
             if (registroManualExterno) {
-                body.registro_manual = true;
                 if (!draftReferencia.trim()) {
                     setDraftError('Registro manual: ingresa folio o referencia del cobro');
                     return;
                 }
             }
-            if (draftReferencia.trim()) body.referencia = draftReferencia.trim();
+            // Para tarjeta externa siempre pedimos referencia (folio) para que /payments/process la acepte.
+            if (!draftReferencia.trim()) {
+                setDraftError('Tarjeta (terminal): ingresa folio o referencia del cobro');
+                return;
+            }
         } else {
-            body.metodo = 'efectivo';
-            if (draftReferencia.trim()) body.referencia = draftReferencia.trim();
+            next.tipo = 'efectivo';
         }
 
+        setPagosTemp((prev) => [...prev, next]);
+        setDraftMonto('');
+        setDraftReferencia('');
+        setResultMessage('');
+    };
+
+    const finalizeSale = async () => {
+        if (!canFinalize) return;
+        setDraftError('');
         setProcessing(true);
         try {
-            const res = await fetchApi('/payments/create', { method: 'POST', body });
+            const snap = cartRef.current || [];
+            const itemsPayload = snap.map((item) => ({
+                product_id: item.id,
+                product_name: item.name,
+                quantity: Number(item.quantity || 0),
+                unit_price: Number(item.price || 0),
+                total: Number(item.price || 0) * Number(item.quantity || 0),
+            }));
+            const totalVenta = roundMoney(
+                snap.reduce((s, item) => s + Number(item.price || 0) * Number(item.quantity || 0), 0),
+            );
+            const pagosPayload = pagosTemp.map((p) => ({
+                metodo_pago: p.tipo,
+                monto: Number(p.monto || 0),
+                referencia: p.referencia || '',
+                metodo: p.metodo || '',
+                numero_tarjeta: p.numero_tarjeta || '',
+            }));
+            const res = await fetchApi('/payments/process', {
+                method: 'POST',
+                body: {
+                    total: totalVenta,
+                    description: `Venta POS - ${itemsPayload.length} productos`,
+                    items: itemsPayload,
+                    pagos: pagosPayload,
+                },
+            });
             const data = await res.json().catch(() => ({}));
             if (!res.ok || data.success === false) {
-                throw new Error(data.error || 'No se pudo registrar el pago');
+                throw new Error(data.error || 'No se pudo finalizar la venta');
             }
-            await refreshSummary(transactionId);
-            setDraftMonto('');
-            setDraftReferencia('');
-            if (data.waiting_terminal) {
-                setResultMessage('Inserte o acerque la tarjeta en la terminal Point…');
-            }
+            setStatus('success');
+            setResultData({
+                transaction_id: data.transaction_id,
+                total: totalVenta,
+                pagos: pagosPayload.map((pp) => ({
+                    metodo_pago: pp.metodo_pago,
+                    monto: pp.monto,
+                    referencia: pp.referencia,
+                })),
+            });
+            setResultMessage('Venta completada');
         } catch (e) {
             console.error(e);
-            setDraftError(e.message || 'Error al procesar');
+            setDraftError(e.message || 'Error al finalizar');
         } finally {
             setProcessing(false);
         }
@@ -432,9 +383,6 @@ export default function PaymentDialog({
         } catch {}
 
         setTimeout(async () => {
-            if (!shouldFinalize) {
-                await cancelRemoteTransaction();
-            }
         onClose();
             if (shouldFinalize && typeof onSuccess === 'function') {
                 requestAnimationFrame(() => {
@@ -448,7 +396,7 @@ export default function PaymentDialog({
                 });
             }
         }, 0);
-    }, [status, resultData, onClose, onSuccess, cancelRemoteTransaction]);
+    }, [status, resultData, onClose, onSuccess]);
 
     useEffect(() => {
         if (!open) return;
@@ -509,7 +457,7 @@ ${pagosBlock}
 
     if (!open) return null;
 
-    const showForm = status !== 'success' && status !== 'error' && !startError;
+    const showForm = status !== 'success' && status !== 'error';
 
     const panel = (
         <>
@@ -536,13 +484,7 @@ ${pagosBlock}
                     </h2>
                 </div>
 
-                {startError ? (
-                    <div className="py-6 text-center space-y-4">
-                        <XCircle className="w-16 h-16 text-red-500 mx-auto" />
-                        <p className="text-sm text-red-700">{startError}</p>
-                        <Button variant="outline" onClick={() => handleClose()}>Cerrar</Button>
-                    </div>
-                ) : status === 'success' ? (
+                {status === 'success' ? (
                     <div className="py-6 text-center animate-in fade-in duration-200">
                                 <CheckCircle className="w-20 h-20 text-green-500 mx-auto" />
                         <h3 className="text-xl font-bold text-slate-800 mt-4">¡Pago completado!</h3>
@@ -563,12 +505,6 @@ ${pagosBlock}
                     </div>
                 ) : (
                     <div className="space-y-4">
-                        {!transactionId ? (
-                            <div className="flex items-center justify-center gap-2 py-12 text-slate-600">
-                                <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
-                                <span>Iniciando venta…</span>
-                            </div>
-                        ) : (
                             <>
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm bg-slate-50 rounded-xl p-3 border border-slate-100">
                                     <div>
@@ -576,13 +512,13 @@ ${pagosBlock}
                                         <p className="font-bold text-slate-800">${saleTotal.toFixed(2)}</p>
                                     </div>
                                     <div>
-                                        <p className="text-slate-500">Pagado (aprob.)</p>
-                                        <p className="font-bold text-emerald-700">${totalAprobado.toFixed(2)}</p>
+                                        <p className="text-slate-500">Pagado</p>
+                                        <p className="font-bold text-emerald-700">${totalPagado.toFixed(2)}</p>
                                     </div>
-                                        <div>
-                                        <p className="text-slate-500">En terminal</p>
-                                        <p className="font-bold text-amber-600">${totalPendiente.toFixed(2)}</p>
-                                        </div>
+                                    <div>
+                                        <p className="text-slate-500">Pagos</p>
+                                        <p className="font-bold text-slate-800">{pagosTemp.length}</p>
+                                    </div>
                                     <div>
                                         <p className="text-slate-500">Restante</p>
                                         <p className={`font-bold ${restanteSrv > EPS ? 'text-amber-600' : 'text-green-600'}`}>
@@ -591,25 +527,19 @@ ${pagosBlock}
                                     </div>
                                 </div>
 
-                                {resultMessage && totalPendiente > 0 ? (
-                                    <p className="text-sm text-center text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                                        {resultMessage}
-                                    </p>
-                                ) : null}
-
                                 <div className="rounded-xl border border-slate-200 p-3">
                                     <Label className="text-slate-700 font-medium">Pagos realizados</Label>
-                                    {(!summary?.pagos || summary.pagos.length === 0) ? (
+                                    {pagosTemp.length === 0 ? (
                                         <p className="text-xs text-slate-500 mt-2">Aún no hay líneas de pago.</p>
                                     ) : (
                                         <ul className="mt-2 space-y-2 max-h-40 overflow-auto">
-                                            {summary.pagos.map((p) => (
+                                            {pagosTemp.map((p) => (
                                                 <li
                                                     key={p.id}
                                                     className="flex items-center justify-between gap-2 text-sm rounded-lg border border-slate-100 bg-white px-3 py-2"
                                                 >
                                                     <div className="flex items-center gap-2 min-w-0">
-                                                        {iconEstado(p.estado)}
+                                                        {iconEstado('aprobado')}
                                                         <span className="truncate">
                                                             {labelMetodo(p.tipo)}
                                                             {p.metodo ? ` · ${p.metodo}` : ''}
@@ -838,8 +768,18 @@ ${pagosBlock}
                                         </div>
                                         {draftError && <p className="text-sm text-red-600">{draftError}</p>}
                                     </div>
-                                ) : showForm && restanteSrv <= EPS && totalPendiente <= EPS ? (
-                                    <p className="text-center text-emerald-700 font-medium py-2">Listo — completando venta…</p>
+                                ) : showForm && canFinalize ? (
+                                    <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-900">
+                                        <p className="font-medium">Listo para finalizar la venta.</p>
+                                        <Button
+                                            type="button"
+                                            className="mt-3 w-full bg-emerald-600 hover:bg-emerald-700"
+                                            onClick={finalizeSale}
+                                            disabled={processing}
+                                        >
+                                            {processing ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Finalizar venta'}
+                                        </Button>
+                                    </div>
                                 ) : null}
 
                                 <div className="flex gap-2 pt-2">
@@ -848,7 +788,6 @@ ${pagosBlock}
                                     </Button>
                                 </div>
                             </>
-                        )}
                     </div>
                 )}
             </div>
