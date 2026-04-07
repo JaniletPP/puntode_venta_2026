@@ -42,10 +42,26 @@ const conn = await mysql.createConnection({
     ...(ssl ? { ssl } : {}),
 });
 
-const [existing] = await conn.execute('SELECT id FROM usuarios WHERE email = ? LIMIT 1', [email]);
+// Asegurar tablas/columnas mínimas para login multi-negocio.
+await conn.execute(`
+  CREATE TABLE IF NOT EXISTS negocios (
+    id VARCHAR(36) NOT NULL PRIMARY KEY,
+    nombre VARCHAR(255) NOT NULL,
+    tipo VARCHAR(100) NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )
+`);
 await conn.execute(
-    "INSERT INTO negocios (id, nombre, tipo) SELECT 'negocio_default', 'Negocio principal', 'general' WHERE NOT EXISTS (SELECT 1 FROM negocios WHERE id = 'negocio_default')",
+  "INSERT INTO negocios (id, nombre, tipo) SELECT 'negocio_default', 'Negocio principal', 'general' WHERE NOT EXISTS (SELECT 1 FROM negocios WHERE id = 'negocio_default')",
 );
+try {
+  await conn.execute('ALTER TABLE usuarios ADD COLUMN negocio_id VARCHAR(36) NULL AFTER nombre');
+} catch (e) {
+  // ER_DUP_FIELDNAME: la columna ya existe (ok)
+  if (e?.code !== 'ER_DUP_FIELDNAME') throw e;
+}
+
+const [existing] = await conn.execute('SELECT id FROM usuarios WHERE email = ? LIMIT 1', [email]);
 if (existing.length) {
     await conn.execute(
         'UPDATE usuarios SET password_hash = ?, rol = ?, nombre = ?, negocio_id = ? WHERE email = ?',
