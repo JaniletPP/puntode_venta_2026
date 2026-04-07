@@ -14,6 +14,13 @@ export default function QRScanner({ open, onClose, onCardFound }) {
     const [cameraError, setCameraError] = useState('');
     const [scanHint, setScanHint] = useState('');
     const [scanning, setScanning] = useState(false);
+    const [autoChargeOnScan, setAutoChargeOnScan] = useState(() => {
+        try {
+            return localStorage.getItem('pv_auto_charge_scan') === '1';
+        } catch {
+            return false;
+        }
+    });
 
     const videoRef = useRef(null);
     const streamRef = useRef(null);
@@ -83,7 +90,7 @@ export default function QRScanner({ open, onClose, onCardFound }) {
             if (methodHint) {
                 setScanHint(`Método detectado: ${methodHint}`);
             }
-            onCardFound(data);
+            onCardFound(data, { autoCharge: autoChargeOnScan, methodHint });
             setCardNumber('');
             setError('');
             onClose();
@@ -227,6 +234,25 @@ export default function QRScanner({ open, onClose, onCardFound }) {
                             {scanHint}
                         </p>
                     ) : null}
+                    <label className="flex items-start gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700">
+                        <input
+                            type="checkbox"
+                            className="mt-0.5"
+                            checked={autoChargeOnScan}
+                            onChange={(e) => {
+                                const v = Boolean(e.target.checked);
+                                setAutoChargeOnScan(v);
+                                try {
+                                    localStorage.setItem('pv_auto_charge_scan', v ? '1' : '0');
+                                } catch {
+                                    // no-op
+                                }
+                            }}
+                        />
+                        <span>
+                            Cobro automático al escanear (agrega pago con saldo de tarjeta y, si cubre el total, finaliza la venta).
+                        </span>
+                    </label>
 
                     <div className="flex gap-2">
                         <div className="relative flex-1">

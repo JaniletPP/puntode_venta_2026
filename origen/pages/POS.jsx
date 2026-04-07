@@ -33,6 +33,7 @@ export default function POS() {
     /** Remonta el modal de cobro para evitar doble /transaction/start en React Strict Mode. */
     const [paymentModalKey, setPaymentModalKey] = useState(0);
     const [selectedCard, setSelectedCard] = useState(null);
+    const [autoChargeOnOpen, setAutoChargeOnOpen] = useState(false);
     const [products, setProducts] = useState([]);
     const [loadingProducts, setLoadingProducts] = useState(true);
 
@@ -175,8 +176,9 @@ export default function POS() {
 
     const total = cart.reduce((sum, item) => sum + (Number(item.price || 0) * Number(item.quantity || 0)), 0);
 
-    const handleCardFound = (card) => {
+    const handleCardFound = (card, options = {}) => {
         setSelectedCard(card);
+        setAutoChargeOnOpen(Boolean(options?.autoCharge));
         setPaymentModalKey((k) => k + 1);
         setShowPayment(true);
     };
@@ -375,9 +377,11 @@ export default function POS() {
                 onClose={() => {
                     setShowPayment(false);
                     setSelectedCard(null);
+                    setAutoChargeOnOpen(false);
                 }}
                 onSuccess={finalizeSuccessfulPayment}
                 preselectedInternalCard={selectedCard}
+                autoChargeOnOpen={autoChargeOnOpen}
                 total={total}
                 cartItems={cart}
                 canCharge={canCharge}

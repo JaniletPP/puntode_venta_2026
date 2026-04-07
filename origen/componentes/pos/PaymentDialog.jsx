@@ -49,6 +49,7 @@ export default function PaymentDialog({
     onClose, 
     onSuccess,
     preselectedInternalCard,
+    autoChargeOnOpen = false,
     total, 
     cartItems = [],
     canCharge = true,
@@ -60,6 +61,8 @@ export default function PaymentDialog({
 
     const closingRef = useRef(false);
     const successHandledRef = useRef(false);
+    const autoAppliedRef = useRef(false);
+    const autoFinalizeRef = useRef(false);
     const cartRef = useRef(cartItems);
     const totalRef = useRef(total);
     cartRef.current = cartItems;
@@ -99,6 +102,8 @@ export default function PaymentDialog({
         if (open) {
             closingRef.current = false;
             successHandledRef.current = false;
+            autoAppliedRef.current = false;
+            autoFinalizeRef.current = false;
         }
     }, [open]);
 
@@ -314,7 +319,7 @@ export default function PaymentDialog({
         setResultMessage('');
     };
 
-    const finalizeSale = async () => {
+    const finalizeSale = useCallback(async () => {
         if (!canFinalize) return;
         setDraftError('');
         setProcessing(true);
@@ -367,7 +372,45 @@ export default function PaymentDialog({
         } finally {
             setProcessing(false);
         }
-    };
+    }, [canFinalize, pagosTemp]);
+
+    useEffect(() => {
+        if (!open || !autoChargeOnOpen) return;
+        if (autoAppliedRef.current) return;
+        if (!selectedInternalCard?.id) return;
+        if (status === 'success') return;
+        const bal = roundMoney(Number(selectedInternalCard.balance || 0));
+        const use = roundMoney(Math.min(restanteSrv, bal));
+        if (!(use > 0)) return;
+
+        autoAppliedRef.current = true;
+        setDraftTipo('tarjeta_interna');
+        setDraftMonto(String(use.toFixed(2)));
+        setPagosTemp((prev) => {
+            if (prev.length > 0) return prev;
+            return [{
+                id: `${Date.now()}_${Math.random().toString(16).slice(2)}`,
+                tipo: 'tarjeta_interna',
+                monto: use,
+                referencia: 'Auto escaneo',
+                metodo: '',
+                numero_tarjeta: String(selectedInternalCard.card_number || '').trim(),
+            }];
+        });
+        const after = roundMoney(restanteSrv - use);
+        if (after <= EPS) {
+            autoFinalizeRef.current = true;
+        } else {
+            setResultMessage(`Pago automático aplicado por ${use.toFixed(2)}. Resta ${after.toFixed(2)}.`);
+        }
+    }, [open, autoChargeOnOpen, selectedInternalCard, restanteSrv, status]);
+
+    useEffect(() => {
+        if (!open || !autoFinalizeRef.current) return;
+        if (!canFinalize || processing || status === 'success') return;
+        autoFinalizeRef.current = false;
+        finalizeSale();
+    }, [open, canFinalize, processing, status, finalizeSale]);
 
     const handleClose = useCallback(() => {
         if (closingRef.current) return;
